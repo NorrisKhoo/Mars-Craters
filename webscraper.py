@@ -1,5 +1,10 @@
 # webscraper.py
-# Norris Khoo
+# Norris Khoo 11/9/2018
+# This script downloads Pyramidized TIFF and ISIS Header files from the ASU CTX image database.
+# The Pyramidized TIFF files are high resolution satellite images of Mars' surface that have
+# been pre-processed. The ISIS Header files contain metadata for their corresponding
+# Pyramidized TIFF file. At the end of the script, a CSV containing the metadata for each
+# image is created
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -13,6 +18,7 @@ import math
 driver = webdriver.Firefox()
 driver.get("https://viewer.mars.asu.edu/viewer/ctx#T=1")
 
+# Input desired longitude and latitude thresholds
 longitudeMinInput = "0"
 longitudeMaxInput = "1"
 latitudeMinInput = "0"
@@ -46,7 +52,9 @@ runQuery.click()
 
 nextPage = True
 i = 0
+k = 0
 
+# Iterate through pages of results
 while nextPage:
     
     sleep(4)
@@ -56,6 +64,7 @@ while nextPage:
     
     sleep(4)
 
+    # Iterate through images in page of result
     for image in images:
 
         column = image.find_elements_by_tag_name("td")
@@ -81,21 +90,34 @@ while nextPage:
 
         sleep(2)
 
+        # Download Pyramidized TIFF. If download fails, retry for specified amount and wait
+        # 30 seconds in between
         tiff = driver.find_elements_by_tag_name("table")[4].get_attribute('innerHTML')
-        url = re.findall('(?<=href=")(.*?)(?="\starget="_blank">Pyramidized\sTIFF)', tiff)[0]
-        r = requests.get(url, stream=True)
-        total_size = int(r.headers.get('content-length', 0)); 
-        block_size = 1024
-        wrote = 0 
-        with open(attributeUnicode[0] + ".tiff", 'wb') as f:
-            for data in tqdm(r.iter_content(block_size), total=math.ceil(total_size//block_size) , unit='KB', unit_scale=True):
-                wrote = wrote  + len(data)
-                f.write(data)
-        if total_size != 0 and wrote != total_size:
-            print("ERROR, something went wrong")
+        tries = 8
+        for k in range(tries):
+            try:
+                url = re.findall('(?<=href=")(.*?)(?="\starget="_blank">Pyramidized\sTIFF)', tiff)[0]
+                r = requests.get(url, stream=True)
+                total_size = int(r.headers.get('content-length', 0)); 
+                block_size = 1024
+                wrote = 0 
+                with open(attributeUnicode[0] + ".tiff", 'wb') as f:
+                    for data in tqdm(r.iter_content(block_size), total=math.ceil(total_size//block_size) , unit='KB', unit_scale=True):
+                        wrote = wrote  + len(data)
+                        f.write(data)
+                if total_size != 0 and wrote != total_size:
+                    print("ERROR, something went wrong")
+            except:
+                if k < tries - 1:
+                    sleep(30)
+                    continue
+                else:
+                    raise
+            break
         
         sleep(2)
         
+        # Download ISIS Header
         url = re.findall('(?<=Pyramidized TIFF</a></td><td><a href=")(.*?)(?=" target="_blank">ISIS Header)', tiff)[0]
         r = requests.get(url, stream=True)
         total_size = int(r.headers.get('content-length', 0)); 
